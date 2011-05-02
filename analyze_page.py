@@ -8,7 +8,7 @@ class AnalyzeBox:
   def __init__(self):
     #self.data = data
     self.path = 'http://localhost:8081'
-    self.colors = {"neg":"FF0000", "pos":"00FF00", "unknown":"000000"}
+    self.colors = {"neg":"FF0000", "pos":"00FF00", "minor":"000000"}
 
   def index(self, text=""):
     text.strip()
@@ -47,7 +47,7 @@ Key:
   def color(self, words, weights, largest):
     output = ""
     for word in words:
-      label, weight = weights[word]
+      label, weight = weights[word.lower()]
       #print "{}: weight {}, label {}".format(word, weight, label)
       color = "000000"
       try:
