@@ -9,17 +9,18 @@ class AnalyzeBox:
     #self.data = data
     self.path = 'http://localhost:8081'
     self.colors = {"neg":"FF0000", "pos":"00FF00", "unknown":"000000"}
-    self.weights = {}
 
   def index(self, text=""):
     text.strip()
     weight_request = urllib.urlopen("{}/weights/?words={}".format(self.path, urllib.quote_plus(text)))
-    self.weights = json.loads(weight_request.next())
+    weights = json.loads(weight_request.next())
     weight_request.close()
-    classification = urllib.urlopen("{}/classify/?words={}".format(self.path, urllib.quote_plus(text)))
-    self.classification = json.loads(classification.next())
-    classification.close()
-    print self.classification
+    largest_weights_request = urllib.urlopen(self.path+"/largest_weights")
+    largest_weights = json.loads(largest_weights_request.next())
+    largest_weights_request.close()
+    classification_request = urllib.urlopen("{}/classify/?words={}".format(self.path, urllib.quote_plus(text)))
+    classification = json.loads(classification_request.next())
+    classification_request.close()
     return """
 <form name="input" action="index" method="get">
 Text: <textarea id="source" name="text" rows="10" cols="50">
@@ -32,7 +33,7 @@ This is what you submitted:
 <br/>
 Key:
 <br/>
-{key}""".format(text=text, colored_text=self.color(text.split()), key="\n".join(["<font color='{}'>{}</font><br/>".format(value,key) for key, value in self.colors.items()]), classification=self.classification)
+{key}""".format(text=text, colored_text=self.color(text.split(),weights, largest_weights), key="\n".join(["<font color='{}'>{}</font><br/>".format(value,key) for key, value in self.colors.items()]), classification=classification)
 
   index.exposed = True
 
@@ -43,14 +44,17 @@ Key:
       kind = "unknown"
     return kind
 
-  def color(self, words):
+  def color(self, words, weights, largest):
     output = ""
     for word in words:
-      label, weight = self.weights[word]
+      label, weight = weights[word]
       #print "{}: weight {}, label {}".format(word, weight, label)
       color = "000000"
-      if (weight > self.weights['largest weights'][label]/5):
-        color = self.colors[label]
+      try:
+        if (weight > largest[label][1]/10):
+          color = self.colors[label]
+      except KeyError:
+        pass
       output = output + " <font color='{}'>{}({:.2f})</font>".format(color, word, weight)
     return output
 
