@@ -8,7 +8,7 @@ def word_feats(words):
 
 class Data:
   def __init__(self):
-    self.feature_weights = {}
+    self.feature_weights = defaultdict(lambda: ('default',0))
     self.largest = defaultdict(lambda: ('default',0))
     self.train()
     self.calculate_weights()
@@ -61,8 +61,9 @@ class Data:
         print "inf!"
         self.largest[l1] = (fname, weight)
       else:
-        weight = cpdist[l1, fname].prob(fval)/cpdist[l0, fname].prob(fval)
-      self.feature_weights[fname] = (l1, weight)
+        weight = (cpdist[l1, fname].prob(fval))/(cpdist[l0, fname].prob(fval))
+      if self.feature_weights[fname][1] < weight:
+        self.feature_weights[fname] = (l1, weight)
       if self.largest[l1][1] < weight and self.largest[l1][1] != "INF":
         print "{}: {}, {} is larger than {}".format(l1, fname, weight, self.largest[l1])
         self.largest[l1] = (fname, weight)
