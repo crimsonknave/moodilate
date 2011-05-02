@@ -33,3 +33,32 @@ class Data:
   def classify(self, words_dict):
     return self.classifier.classify(words_dict)
 
+  def weight(self, word):
+    cpdist = self.classifier._feature_probdist
+    def label_prob(label, name, value):
+      return cpdist[label, name].prob(value)
+
+    labels = []
+    for label in self.classifier._labels:
+      print label
+      try:
+        #if word in cpdist[label, word.encode('ascii')].samples():
+        labels.append([label_prob(label, word, True), label])
+        #else:
+        #  return (1, 'unknown')
+      except KeyError:
+        print "Key Error"
+        return ('unknown', 1)
+
+    labels = sorted(labels)
+    print labels
+    return (labels[-1][1], labels[-1][0]/labels[0][0])
+
+
+
+    try:
+      asdf
+    except KeyError:
+      return 
+
+

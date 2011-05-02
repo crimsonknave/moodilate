@@ -5,7 +5,7 @@ import cherrypy
 class AnalyzeBox:
   def __init__(self, data):
     self.data = data
-    self.colors = {"neg":"FF0000", "pos":"00FF00"}
+    self.colors = {"neg":"FF0000", "pos":"00FF00", "unknown":"000000"}
 
   def index(self, text=""):
     text.strip()
@@ -26,12 +26,18 @@ Key:
   index.exposed = True
 
   def polarize(self, word): 
-    return self.data.classify_word(word)
+    try:
+      kind = self.data.classifier._feature_probdist[word]
+    except KeyError:
+      kind = "unknown"
+    return kind
 
-  def color(self, words, style_method=polarize):
+  def color(self, words):
     output = ""
     for word in words:
-      output = output + " <font color='{}'>{}</font>".format(self.colors[style_method(self,word)], word)
+      label, weight = self.data.weight(word)
+      #print "{}: weight {}, label {}".format(word, weight, label)
+      output = output + " <font color='{}'>{}({:.2f})</font>".format(self.colors[label], word, weight)
     return output
 
   def print_classifiers(self, classifiers):
