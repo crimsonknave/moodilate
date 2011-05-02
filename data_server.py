@@ -1,31 +1,49 @@
 #!/usr/bin/python2
 
 import cherrypy
+import sys
 from nltk.compat import defaultdict
+import nltk.classify.util, nltk.metrics
+from nltk.classify import NaiveBayesClassifier
+from nltk.corpus import movie_reviews
+from nltk.corpus import stopwords
+from nltk.collocations import BigramCollocationFinder
+import itertools
+import random
 
-def word_feats(words):
-  return dict([(word, True) for word in words])
+
 
 class Data:
+  def word_feats(self, words):
+    return dict([(word, True) for word in words])
+
+  def stopword_filtered_word_feats(self, words):
+    return dict([(word, True) for word in words if word not in self.stopset])
+
+  def bigram_word_feats(self, words, score_fn=nltk.metrics.BigramAssocMeasures.chi_sq, n=200):
+    bigram_finder = BigramCollocationFinder.from_words(words)
+    bigrams = bigram_finder.nbest(score_fn, n)
+    return dict([(ngram, True) for ngram in itertools.chain(words, bigrams)])
+
   def __init__(self):
     self.feature_weights = defaultdict(lambda: ('default',0))
     self.largest = defaultdict(lambda: ('default',0))
-    self.train()
+    self.stopset = set(stopwords.words('english'))
+    #self.train(self.word_feats)
+    #self.train(self.stopword_filtered_word_feats)
+    self.my_feats = self.bigram_word_feats
+    self.train(self.my_feats)
     self.calculate_weights()
-  def train(self):
+  def train(self, feats):
     print "Starting to train the data"
-    import nltk.classify.util
-    from nltk.classify import NaiveBayesClassifier
-    from nltk.corpus import movie_reviews
-    import random
 
     self.negids = movie_reviews.fileids('neg')
     self.posids = movie_reviews.fileids('pos')
     #random.shuffle(self.negids)
     #random.shuffle(self.posids)
 
-    self.negfeats = [(word_feats(movie_reviews.words(fileids=[f])), 'neg') for f in self.negids]
-    self.posfeats = [(word_feats(movie_reviews.words(fileids=[f])), 'pos') for f in self.posids]
+    self.negfeats = [(feats(movie_reviews.words(fileids=[f])), 'neg') for f in self.negids]
+    self.posfeats = [(feats(movie_reviews.words(fileids=[f])), 'pos') for f in self.posids]
 
     self.negcutoff = len(self.negfeats)*3/4
     self.poscutoff = len(self.posfeats)*3/4
@@ -34,15 +52,31 @@ class Data:
     self.testfeats = self.negfeats[self.negcutoff:] + self.posfeats[self.poscutoff:]
 
     self.classifier = NaiveBayesClassifier.train(self.trainfeats)
+    self.refsets = defaultdict(set)
+    self.testsets = defaultdict(set)
+
+    for i, (feats, label) in enumerate(self.testfeats):
+      self.refsets[label].add(i)
+      observed = self.classifier.classify(feats)
+      self.testsets[observed].add(i)
+
     print 'accuracy:', nltk.classify.util.accuracy(self.classifier, self.testfeats)
+    print 'pos precision:', nltk.metrics.precision(self.refsets['pos'], self.testsets['pos'])
+    print 'pos recall:', nltk.metrics.recall(self.refsets['pos'], self.testsets['pos'])
+    print 'neg precision:', nltk.metrics.precision(self.refsets['neg'], self.testsets['neg'])
+    print 'neg recall:', nltk.metrics.recall(self.refsets['neg'], self.testsets['neg'])
     self.classifier.show_most_informative_features()
+    self.trained = True
   
   #def classify_word(self, word):
   #  return self.classifier.classify({word:True})
   #classify_word.exposed = True
   def classify(self, words):
-    words_dict = dict([(word, True) for word in words])
-    return self.classifier.classify(words_dict)
+    #words = words.split()
+    #words_dict = dict([(word, True) for word in words])
+    class_dict = self.my_feats(words.split())
+    print "Class_dict is:", class_dict
+    return self.classifier.classify(class_dict)
   classify.exposed = True
 
   def calculate_weights(self):
@@ -65,7 +99,7 @@ class Data:
       if self.feature_weights[fname][1] < weight:
         self.feature_weights[fname] = (l1, weight)
       if self.largest[l1][1] < weight and self.largest[l1][1] != "INF":
-        print "{}: {}, {} is larger than {}".format(l1, fname, weight, self.largest[l1])
+        #print "{}: {}, {} is larger than {}".format(l1, fname, weight, self.largest[l1])
         self.largest[l1] = (fname, weight)
 
   def list_all_features(self):
@@ -92,9 +126,10 @@ class Data:
 
   def weight(self, word):
     try:
-      weight = self.feature_weights[word]
+      weight = self.feature_weights[word.lower()]
     except KeyError:
-      weight = ('unknown', 1)
+      weight = ('minor', 1)
+    #print "Found the weight for {} to be {}".format(word, weight)
     return weight
   weight.exposed = True
 
@@ -110,10 +145,10 @@ class Data:
         #if word in cpdist[label, word.encode('ascii')].samples():
         labels.append([label_prob(label, word, True), label])
         #else:
-        #  return (1, 'unknown')
+        #  return (1, 'minor')
       except KeyError:
         print "Key Error: {}".format(word)
-        return ('unknown', 1)
+        return ('minor', 1)
 
     labels = sorted(labels)
     return (labels[-1][1], labels[-1][0]/labels[0][0])
