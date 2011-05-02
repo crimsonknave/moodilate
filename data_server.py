@@ -1,5 +1,7 @@
 #!/usr/bin/python2
 
+import cherrypy
+
 def word_feats(words):
   return dict([(word, True) for word in words])
 
@@ -30,35 +32,44 @@ class Data:
   
   def classify_word(self, word):
     return self.classifier.classify({word:True})
-  def classify(self, words_dict):
+  classify_word.exposed = True
+  def classify(self, words):
+    words_dict = dict([(word, True) for word in words])
     return self.classifier.classify(words_dict)
+  classify.exposed = True
 
+  def weights(self, words):
+    words = words.split()
+    if len(words) < 2:
+      return {words[0]:self.weight(words[0])} 
+    weights = {}
+    for word in words:
+      weights[word] = self.weight(word)
+    return weights
+  weights.exposed = True
   def weight(self, word):
+    print "Weighing: {}".format(word)
     cpdist = self.classifier._feature_probdist
     def label_prob(label, name, value):
       return cpdist[label, name].prob(value)
 
     labels = []
     for label in self.classifier._labels:
-      print label
       try:
         #if word in cpdist[label, word.encode('ascii')].samples():
         labels.append([label_prob(label, word, True), label])
         #else:
         #  return (1, 'unknown')
       except KeyError:
-        print "Key Error"
+        print "Key Error: {}".format(word)
         return ('unknown', 1)
 
     labels = sorted(labels)
-    print labels
     return (labels[-1][1], labels[-1][0]/labels[0][0])
+  weight.exposed = True
 
-
-
-    try:
-      asdf
-    except KeyError:
-      return 
-
-
+data = Data()
+data.train()
+#app = cherrypy.tree.mount(data, script_name='/')
+cherrypy.config['tools.json_out.on'] = True
+cherrypy.quickstart(data)
