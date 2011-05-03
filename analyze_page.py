@@ -2,13 +2,14 @@
 
 import cherrypy
 import urllib
-import json
+#import json
+from string_json import json
 
 class AnalyzeBox:
   def __init__(self):
     #self.data = data
     self.path = 'http://localhost:8081'
-    self.colors = {"neg":"FF0000", "pos":"00FF00", "minor":"000000"}
+    self.colors = {"neg":"FF0000", "pos":"00FF00", "neutral":"000000"}
 
   def index(self, text=""):
     text.strip()
