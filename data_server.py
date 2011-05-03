@@ -10,12 +10,14 @@ from nltk.corpus import stopwords
 from nltk.collocations import BigramCollocationFinder
 import itertools
 import random
+import datetime
+import json
 
 
 
 class Data:
   def word_feats(self, words):
-    return dict([(word, True) for word in words])
+    return dict([(word, True) for word in self.pruned_filter(words)])
 
   def stopword_filtered_word_feats(self, words):
     return dict([(word, True) for word in words if word not in self.stopset])
@@ -23,19 +25,28 @@ class Data:
   def bigram_word_feats(self, words, score_fn=nltk.metrics.BigramAssocMeasures.chi_sq, n=200):
     bigram_finder = BigramCollocationFinder.from_words(words)
     bigrams = bigram_finder.nbest(score_fn, n)
-    return dict([(ngram, True) for ngram in itertools.chain(words, bigrams)])
+    return dict([(ngram, True) for ngram in itertools.chain(self.pruned_filter(words), bigrams)])
+
+  def first_last_word_feats(self, words):
+    return {"first": words[0], "last": words[-1]}
+
+  def pruned_filter(self, words):
+    if self.trained:
+      return [word for word in words if (word, True) in self.feature_weights.keys()]
+    else:
+      return words
 
   def __init__(self):
     self.feature_weights = defaultdict(lambda: ('default',0))
-    self.largest = defaultdict(lambda: ('default',0))
+    self.trained = False
+    self.largest = defaultdict(lambda: ('default name', 'default value',0))
     self.stopset = set(stopwords.words('english'))
-    #self.train(self.word_feats)
-    #self.train(self.stopword_filtered_word_feats)
-    self.my_feats = self.bigram_word_feats
+    self.my_feats = self.word_feats
     self.train(self.my_feats)
     self.calculate_weights()
   def train(self, feats):
     print "Starting to train the data"
+    start = datetime.datetime.now()
 
     self.negids = movie_reviews.fileids('neg')
     self.posids = movie_reviews.fileids('pos')
@@ -60,6 +71,10 @@ class Data:
       observed = self.classifier.classify(feats)
       self.testsets[observed].add(i)
 
+    end = datetime.datetime.now()
+    print "Training lasted for ", end-start
+
+
     print 'accuracy:', nltk.classify.util.accuracy(self.classifier, self.testfeats)
     print 'pos precision:', nltk.metrics.precision(self.refsets['pos'], self.testsets['pos'])
     print 'pos recall:', nltk.metrics.recall(self.refsets['pos'], self.testsets['pos'])
@@ -74,13 +89,14 @@ class Data:
   def classify(self, words):
     #words = words.split()
     #words_dict = dict([(word, True) for word in words])
-    class_dict = self.my_feats(words.split())
-    print "Class_dict is:", class_dict
-    return self.classifier.classify(class_dict)
+    feature_dict = self.my_feats(words.split())
+    print "Class_dict is:", feature_dict
+    return self.classifier.classify(feature_dict)
   classify.exposed = True
 
   def calculate_weights(self):
     print "Calculating weights"
+    start = datetime.datetime.now()
     cpdist = self.classifier._feature_probdist
     for (fname, fval) in self.list_all_features():
       def label_prob(l):
@@ -93,14 +109,29 @@ class Data:
       if cpdist[l0, fname].prob(fval) == 0:
         weight = "INF"
         print "inf!"
-        self.largest[l1] = (fname, weight)
+        self.largest[l1] = (fname, fval, weight)
       else:
         weight = (cpdist[l1, fname].prob(fval))/(cpdist[l0, fname].prob(fval))
-      if self.feature_weights[fname][1] < weight:
-        self.feature_weights[fname] = (l1, weight)
-      if self.largest[l1][1] < weight and self.largest[l1][1] != "INF":
+      if self.feature_weights[(fname, fval)][1] < weight:
+        self.feature_weights[(fname, fval)] = (l1, weight)
+      if self.largest[l1][2] < weight and self.largest[l1][2] != "INF":
         #print "{}: {}, {} is larger than {}".format(l1, fname, weight, self.largest[l1])
-        self.largest[l1] = (fname, weight)
+        self.largest[l1] = (fname, fval, weight)
+
+    end = datetime.datetime.now()
+    print "Weighing lasted for ", end-start
+
+    print "Pruning the weights"
+    start = datetime.datetime.now()
+    total = len(self.feature_weights)
+    useful_feature_weights = {}
+    for feature, (label, weight) in self.feature_weights.items():
+      if weight > self.largest[label][2]/10 and label in self.classifier._labels:
+        useful_feature_weights[feature] = (label, weight)
+    self.feature_weights = useful_feature_weights
+    print "feature_weights had {} entires it now has {}".format(total, len(self.feature_weights))
+    end = datetime.datetime.now()
+    print "Pruning lasted for ", end-start
 
   def list_all_features(self):
     features = set()
@@ -113,23 +144,26 @@ class Data:
     return self.largest
   largest_weights.exposed = True
 
-
-
   def weights(self, words):
-    words = words.split()
+    feature_dict = self.my_feats([word.lower() for word in words.split()])
     weights = {}
 
-    for word in words:
-      weights[word] = self.weight(word)
+    for feature, value in feature_dict.items():
+      # We encode the tuple as json because json hashes require strings as keys
+      label, weight = self.weight((feature, value))
+      print label, weight
+      weights[json.dumps((feature, value))] = (label, weight)
+    print weights
     return weights
   weights.exposed = True
 
-  def weight(self, word):
+  def weight(self, feature):
+    print "Looking for the weight of ", feature
     try:
-      weight = self.feature_weights[word.lower()]
+      weight = self.feature_weights[feature]
     except KeyError:
-      weight = ('minor', 1)
-    #print "Found the weight for {} to be {}".format(word, weight)
+      weight = ('neutral', 1)
+    print "Found the weight for {} to be {}".format(feature, weight)
     return weight
   weight.exposed = True
 
@@ -145,10 +179,10 @@ class Data:
         #if word in cpdist[label, word.encode('ascii')].samples():
         labels.append([label_prob(label, word, True), label])
         #else:
-        #  return (1, 'minor')
+        #  return (1, 'neutral')
       except KeyError:
         print "Key Error: {}".format(word)
-        return ('minor', 1)
+        return ('neutral', 1)
 
     labels = sorted(labels)
     return (labels[-1][1], labels[-1][0]/labels[0][0])
