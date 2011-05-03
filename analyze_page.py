@@ -2,8 +2,39 @@
 
 import cherrypy
 import urllib
-#import json
-from string_json import json
+import json
+from collections import defaultdict
+from operator import itemgetter
+
+def tuplify(tup):
+  """ Taken from http://stackoverflow.com/questions/1014352/how-do-i-convert-a-nested-tuple-of-tuples-and-lists-to-lists-of-lists-in-python with only a name change"""
+  if isinstance(tup, (list, tuple)):
+    return tuple([tuplify(i) for i in tup])
+  return tup
+
+def label_columns(d):
+  print d
+  html = "<table>\n<tr>\n"
+  for label in d.keys():
+    html += "  <th>{}</th>\n".format(label)
+  for row in zip(*d.values()):
+    html += "  <tr>\n"
+    for column in row:
+      html += "    <td>{}</td>\n".format(column)
+    html += "  </tr>\n"
+  html += "</table>\n"
+
+  print html
+  return html
+
+def decode_keys(encoded_dict):
+  print encoded_dict
+  new_dict = {}
+  for key, value in encoded_dict.items():
+    new_key = json.loads(key)
+    print new_key
+    new_dict[tuplify(new_key)] = value
+  return new_dict
 
 class AnalyzeBox:
   def __init__(self):
@@ -14,7 +45,7 @@ class AnalyzeBox:
   def index(self, text=""):
     text.strip()
     weight_request = urllib.urlopen("{}/weights/?words={}".format(self.path, urllib.quote_plus(text)))
-    weights = json.loads(weight_request.next())
+    weights = decode_keys(json.loads(weight_request.next()))
     weight_request.close()
     largest_weights_request = urllib.urlopen(self.path+"/largest_weights")
     largest_weights = json.loads(largest_weights_request.next())
@@ -29,12 +60,13 @@ Text: <textarea id="source" name="text" rows="10" cols="50">
 <input type="submit" value="Analyze"/>
 </form>
 Your text was {classification}<br/>
-This is what you submitted:
-{colored_text}
+The most significant parts were:
+<br/>
+{influencers}
 <br/>
 Key:
 <br/>
-{key}""".format(text=text, colored_text=self.color(text.split(),weights, largest_weights), key="\n".join(["<font color='{}'>{}</font><br/>".format(value,key) for key, value in self.colors.items()]), classification=classification)
+{key}""".format(text=text, influencers=label_columns(self.influencers(weights)), key="\n".join(["<font color='{}'>{}</font><br/>".format(value,key) for key, value in self.colors.items()]), classification=classification)
 
   index.exposed = True
 
@@ -45,10 +77,23 @@ Key:
       kind = "unknown"
     return kind
 
-  def color(self, words, weights, largest):
+  def influencers(self, weights, n=5):
+    labels = defaultdict(list)
+    for feature in weights.keys():
+      label, weight = weights[feature]
+      labels[label].append((feature, weight))
+
+    for key, value in labels.items():
+      labels[key] = sorted(value,key=itemgetter(1))[:n]
+    return labels
+
+
+  def color(self,  weights, largest):
+    """ attempts to color the inputs based on weight and label."""
     output = ""
-    for word in words:
-      label, weight = weights[word.lower()]
+    for feature in weights.keys():
+      label, weight = weights[feature]
+      print feature, label, weight
       #print "{}: weight {}, label {}".format(word, weight, label)
       color = "000000"
       try:
@@ -56,7 +101,7 @@ Key:
           color = self.colors[label]
       except KeyError:
         pass
-      output = output + " <font color='{}'>{}({:.2f})</font>".format(color, word, weight)
+      output = output + " <font color='{}'>{}({:.2f})</font>".format(color, feature, weight)
     return output
 
   def print_classifiers(self, classifiers):
