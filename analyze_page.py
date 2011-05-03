@@ -13,11 +13,11 @@ def tuplify(tup):
   return tup
 
 def label_columns(d):
-  print d
   html = "<table>\n<tr>\n"
   for label in d.keys():
     html += "  <th>{}</th>\n".format(label)
-  for row in zip(*d.values()):
+  for row in map(none_to_string, *d.values()):
+    print "row", row
     html += "  <tr>\n"
     for column in row:
       html += "    <td>{}</td>\n".format(column)
@@ -27,8 +27,12 @@ def label_columns(d):
   print html
   return html
 
+def none_to_string(*args):
+  "   used with map to emulate the builtin zip, but replaces emptyness with ''"
+  return ["" if x == None else x for x in args]
+
 def decode_keys(encoded_dict):
-  print encoded_dict
+  print "encoded_dict", encoded_dict
   new_dict = {}
   for key, value in encoded_dict.items():
     new_key = json.loads(key)
@@ -47,6 +51,7 @@ class AnalyzeBox:
     weight_request = urllib.urlopen("{}/weights/?words={}".format(self.path, urllib.quote_plus(text)))
     weights = decode_keys(json.loads(weight_request.next()))
     weight_request.close()
+    print "weights", weights
     largest_weights_request = urllib.urlopen(self.path+"/largest_weights")
     largest_weights = json.loads(largest_weights_request.next())
     largest_weights_request.close()
@@ -84,7 +89,8 @@ Key:
       labels[label].append((feature, weight))
 
     for key, value in labels.items():
-      labels[key] = sorted(value,key=itemgetter(1))[:n]
+      labels[key] = sorted(value,key=itemgetter(1), reverse=True)[:n]
+    print "labels", labels
     return labels
 
 
