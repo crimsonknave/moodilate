@@ -41,7 +41,7 @@ class Data:
     self.trained = False
     self.largest = defaultdict(lambda: ('default name', 'default value',0))
     self.stopset = set(stopwords.words('english'))
-    self.my_feats = self.word_feats
+    self.my_feats = self.bigram_word_feats
     self.train(self.my_feats)
     self.calculate_weights()
   def train(self, feats):

@@ -43,9 +43,3 @@ _default_decoder = StrJSONDecoder(encoding=None, object_hook=None, object_pairs_
 
 json._default_decoder = _default_decoder
 
-
-
-a = ('asdf', 'asd')
-print a
-print json.dumps(a)
-print json.loads(json.dumps(a))
