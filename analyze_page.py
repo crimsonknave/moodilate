@@ -80,7 +80,7 @@ Your text was {classification}<br/>
 The most significant parts were:
 <br/>
 {influencers}
-<br/>""".format(text=text, influencers=label_columns(self.influencers(weights)), key="\n".join(["<font color='{}'>{}</font><br/>".format(value,key) for key, value in self.colors.items()]), classification=classification)
+<br/>""".format(**formatters)
 
   index.exposed = True
 
