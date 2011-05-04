@@ -25,7 +25,7 @@ class Data:
   def bigram_word_feats(self, words, score_fn=nltk.metrics.BigramAssocMeasures.chi_sq, n=200):
     bigram_finder = BigramCollocationFinder.from_words(words)
     bigrams = bigram_finder.nbest(score_fn, n)
-    return dict([(ngram, True) for ngram in itertools.chain(self.pruned_filter(words), bigrams)])
+    return dict([(ngram, True) for ngram in self.pruned_filter(itertools.chain(words, bigrams))])
 
   def first_last_word_feats(self, words):
     return {"first": words[0], "last": words[-1]}
