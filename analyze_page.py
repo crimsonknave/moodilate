@@ -6,6 +6,7 @@ import urllib, urllib2
 import json
 from collections import defaultdict
 from operator import itemgetter
+import datetime
 
 def tuplify(tup):
   """ Taken from http://stackoverflow.com/questions/1014352/how-do-i-convert-a-nested-tuple-of-tuples-and-lists-to-lists-of-lists-in-python with only a name change"""
@@ -22,7 +23,7 @@ def label_columns(d):
     html += "  <tr>\n"
     for column in row:
       if column:
-        html += "    <td>{} = {} : {}</td>\n".format(column[0][0], column[0][1], column[1])
+        html += "    <td>{} = {} : {:.2f}</td>\n".format(column[0][0], column[0][1], column[1])
       else:
         html += "    <td></td>\n"
     html += "  </tr>\n"
@@ -36,11 +37,11 @@ def none_to_string(*args):
   return ["" if x == None else x for x in args]
 
 def decode_keys(encoded_dict):
-  print "encoded_dict", encoded_dict
+  #print "encoded_dict", encoded_dict
   new_dict = {}
   for key, value in encoded_dict.items():
     new_key = json.loads(key)
-    print new_key
+    #print new_key
     new_dict[tuplify(new_key)] = value
   return new_dict
 
@@ -51,34 +52,50 @@ class AnalyzeBox:
     self.colors = {"neg":"FF0000", "pos":"00FF00", "neutral":"000000"}
 
   def index(self, text=""):
+    start = datetime.datetime.now()
+    word_count = len(text.split())
     text.strip()
     text = text.encode('utf-8')
     print "text begins like", text[0:50]
     populated = True if len(text)>0 else False
     if populated:
       values = {'words':text}
-      weight_request = urllib2.Request("{}/weights".format(self.path), urllib.urlencode(values))
+      data = urllib.urlencode(values)
+      w_start = datetime.datetime.now()
+      weight_request = urllib2.Request("{}/weights".format(self.path), data)
       weight_resp = urllib2.urlopen(weight_request)
       weights = decode_keys(json.loads(weight_resp.read()))
-      #weight_request.close()
       print "weights", weights
-      largest_weights_request = urllib.urlopen(self.path+"/largest_weights")
-      largest_weights = json.loads(largest_weights_request.next())
-      largest_weights_request.close()
-      classification_request = urllib.urlopen("{}/classify/?words={}".format(self.path, urllib.quote_plus(text)))
-      classification = json.loads(classification_request.next())
-      classification_request.close()
+      w_end = datetime.datetime.now()
+      #largest_weights_request = urllib.urlopen(self.path+"/largest_weights")
+      #largest_weights = json.loads(largest_weights_request.next())
+      #largest_weights_request.close()
+      c_start = datetime.datetime.now()
+      class_req = urllib2.Request("{}/classify".format(self.path), data)
+      class_resp = urllib2.urlopen(class_req)
+      classification = json.loads(class_resp.read())
+      c_end = datetime.datetime.now()
       influencers = label_columns(self.influencers(weights))
     else:
       print "unpopulated"
+      w_start = datetime.datetime.now()
+      w_end = datetime.datetime.now()
       influencers = ""
       classification = ""
+      c_start = datetime.datetime.now()
+      c_end = datetime.datetime.now()
     formatters={
         'text':text,
         #'key':'\n'.join(["<font color='{}'>{}</font><br/>".format(value,key) for key, value in self.colors.items()]),
         'influencers':influencers,
         'classification':classification
         }
+
+    end = datetime.datetime.now()
+    total = end-start
+    w_total = w_end-w_start
+    c_total = c_end-c_start
+    print "Processing {} words lasted {} ({} wps), weights took {} ({} wps), classification took {} ({} wps)".format(word_count, total, word_count/total.total_seconds(), w_total, word_count/w_total.total_seconds(), c_total, word_count/c_total.total_seconds())
     return """
 <form name="input" action="moodilate" method="post">
 Text: <textarea id="source" name="text" rows="10" cols="50">
@@ -100,7 +117,7 @@ The most significant parts were:
       kind = "unknown"
     return kind
 
-  def influencers(self, weights, n=5):
+  def influencers(self, weights, n=10):
     labels = defaultdict(list)
     for feature in weights.keys():
       label, weight = weights[feature]
