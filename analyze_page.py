@@ -48,16 +48,28 @@ class AnalyzeBox:
 
   def index(self, text=""):
     text.strip()
-    weight_request = urllib.urlopen("{}/weights/?words={}".format(self.path, urllib.quote_plus(text)))
-    weights = decode_keys(json.loads(weight_request.next()))
-    weight_request.close()
-    print "weights", weights
-    largest_weights_request = urllib.urlopen(self.path+"/largest_weights")
-    largest_weights = json.loads(largest_weights_request.next())
-    largest_weights_request.close()
-    classification_request = urllib.urlopen("{}/classify/?words={}".format(self.path, urllib.quote_plus(text)))
-    classification = json.loads(classification_request.next())
-    classification_request.close()
+    populated = True if len(text)>0 else False
+    if populated:
+      weight_request = urllib.urlopen("{}/weights/?words={}".format(self.path, urllib.quote_plus(text)))
+      weights = decode_keys(json.loads(weight_request.next()))
+      weight_request.close()
+      print "weights", weights
+      largest_weights_request = urllib.urlopen(self.path+"/largest_weights")
+      largest_weights = json.loads(largest_weights_request.next())
+      largest_weights_request.close()
+      classification_request = urllib.urlopen("{}/classify/?words={}".format(self.path, urllib.quote_plus(text)))
+      classification = json.loads(classification_request.next())
+      classification_request.close()
+      influencers = label_columns(self.influencers(weights))
+    else:
+      influencers = ""
+      classification = ""
+    formatters={
+        'text':text,
+        #'key':'\n'.join(["<font color='{}'>{}</font><br/>".format(value,key) for key, value in self.colors.items()]),
+        'influencers':influencers
+        'classification':classification
+        }
     return """
 <form name="input" action="index" method="get">
 Text: <textarea id="source" name="text" rows="10" cols="50">
@@ -68,10 +80,7 @@ Your text was {classification}<br/>
 The most significant parts were:
 <br/>
 {influencers}
-<br/>
-Key:
-<br/>
-{key}""".format(text=text, influencers=label_columns(self.influencers(weights)), key="\n".join(["<font color='{}'>{}</font><br/>".format(value,key) for key, value in self.colors.items()]), classification=classification)
+<br/>""".format(text=text, influencers=label_columns(self.influencers(weights)), key="\n".join(["<font color='{}'>{}</font><br/>".format(value,key) for key, value in self.colors.items()]), classification=classification)
 
   index.exposed = True
 
