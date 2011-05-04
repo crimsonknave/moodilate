@@ -67,7 +67,7 @@ class AnalyzeBox:
     formatters={
         'text':text,
         #'key':'\n'.join(["<font color='{}'>{}</font><br/>".format(value,key) for key, value in self.colors.items()]),
-        'influencers':influencers
+        'influencers':influencers,
         'classification':classification
         }
     return """
