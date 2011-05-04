@@ -191,6 +191,6 @@ if __name__ == "__main__":
   data = Data()
   #data.train()
   #app = cherrypy.tree.mount(data, script_name='/')
-  conf = {'tools.json_out.on':True, 'server.socket_port':8081}
+  conf = {'tools.json_out.on':True, 'server.socket_port':1234}
   cherrypy.config.update(conf)
   cherrypy.quickstart(data)

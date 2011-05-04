@@ -43,7 +43,7 @@ def decode_keys(encoded_dict):
 class AnalyzeBox:
   def __init__(self):
     #self.data = data
-    self.path = 'http://localhost:8081'
+    self.path = 'http://localhost:1234'
     self.colors = {"neg":"FF0000", "pos":"00FF00", "neutral":"000000"}
 
   def index(self, text=""):
@@ -117,5 +117,7 @@ Key:
 def word_feats(words):
   return dict([(word, True) for word in words])
 
+conf = {'server.socket_port':4321}
+cherrypy.config.update(conf)
 cherrypy.quickstart(AnalyzeBox())
 
