@@ -1,7 +1,8 @@
 #!/usr/bin/env python2
+# -*- coding: utf-8 -*-
 
 import cherrypy
-import urllib
+import urllib, urllib2
 import json
 from collections import defaultdict
 from operator import itemgetter
@@ -20,7 +21,10 @@ def label_columns(d):
     print "row", row
     html += "  <tr>\n"
     for column in row:
-      html += "    <td>{}</td>\n".format(column)
+      if column:
+        html += "    <td>{} = {} : {}</td>\n".format(column[0][0], column[0][1], column[1])
+      else:
+        html += "    <td></td>\n"
     html += "  </tr>\n"
   html += "</table>\n"
 
@@ -48,11 +52,15 @@ class AnalyzeBox:
 
   def index(self, text=""):
     text.strip()
+    text = text.encode('utf-8')
+    print "text begins like", text[0:50]
     populated = True if len(text)>0 else False
     if populated:
-      weight_request = urllib.urlopen("{}/weights/?words={}".format(self.path, urllib.quote_plus(text)))
-      weights = decode_keys(json.loads(weight_request.next()))
-      weight_request.close()
+      values = {'words':text}
+      weight_request = urllib2.Request("{}/weights".format(self.path), urllib.urlencode(values))
+      weight_resp = urllib2.urlopen(weight_request)
+      weights = decode_keys(json.loads(weight_resp.read()))
+      #weight_request.close()
       print "weights", weights
       largest_weights_request = urllib.urlopen(self.path+"/largest_weights")
       largest_weights = json.loads(largest_weights_request.next())
@@ -62,6 +70,7 @@ class AnalyzeBox:
       classification_request.close()
       influencers = label_columns(self.influencers(weights))
     else:
+      print "unpopulated"
       influencers = ""
       classification = ""
     formatters={
@@ -71,7 +80,7 @@ class AnalyzeBox:
         'classification':classification
         }
     return """
-<form name="input" action="index" method="get">
+<form name="input" action="moodilate" method="post">
 Text: <textarea id="source" name="text" rows="10" cols="50">
 {text}</textarea>
 <input type="submit" value="Analyze"/>
