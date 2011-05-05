@@ -19,7 +19,7 @@ def label_columns(d):
   for label in d.keys():
     html += "  <th>{}</th>\n".format(label)
   for row in map(none_to_string, *d.values()):
-    print "row", row
+    #print "row", row
     html += "  <tr>\n"
     for column in row:
       if column:
@@ -29,7 +29,7 @@ def label_columns(d):
     html += "  </tr>\n"
   html += "</table>\n"
 
-  print html
+  #print html
   return html
 
 def none_to_string(*args):
@@ -65,7 +65,7 @@ class AnalyzeBox:
       weight_request = urllib2.Request("{}/weights".format(self.path), data)
       weight_resp = urllib2.urlopen(weight_request)
       weights = decode_keys(json.loads(weight_resp.read()))
-      print "weights", weights
+      #print "weights", weights
       w_end = datetime.datetime.now()
       #largest_weights_request = urllib.urlopen(self.path+"/largest_weights")
       #largest_weights = json.loads(largest_weights_request.next())
@@ -125,7 +125,7 @@ The most significant parts were:
 
     for key, value in labels.items():
       labels[key] = sorted(value,key=itemgetter(1), reverse=True)[:n]
-    print "labels", labels
+    #print "labels", labels
     return labels
 
 
