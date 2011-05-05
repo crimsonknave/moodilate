@@ -4,7 +4,7 @@ import cherrypy
 import sys
 from nltk.compat import defaultdict
 import nltk.classify.util, nltk.metrics
-from nltk.classify import NaiveBayesClassifier
+from nltk.classify import NaiveBayesClassifier, apply_features
 from nltk.corpus import movie_reviews
 from nltk.corpus import stopwords
 from nltk.collocations import BigramCollocationFinder
@@ -16,6 +16,13 @@ import json
 
 
 class Data:
+  def text_feats(self, text):
+    document_words = set(text)
+    features = {}
+    for word in self.word_features:
+      features['contains({})'.format(word)] = (word in document_words)
+    return features
+
   def word_feats(self, words):
     return dict([(word, True) for word in self.pruned_filter(words)])
 
@@ -32,9 +39,15 @@ class Data:
 
   def pruned_filter(self, words):
     if self.trained:
-      return [word for word in words if (word, True) in self.feature_weights.keys()]
+      important_features = set(self.feature_weights.keys())
+      return [word for word in words if (word, True) in important_features]
     else:
       return words
+
+  def parse_text(self, raw):
+    tokens = [token.lower() for token in nltk.wordpunct_tokenize(raw)]
+    print len(tokens)
+    return tokens
 
   def __init__(self):
     self.feature_weights = defaultdict(lambda: ('default',0))
@@ -43,30 +56,66 @@ class Data:
     self.stopset = set(stopwords.words('english'))
     self.my_feats = self.bigram_word_feats
     self.train(self.my_feats)
+    #self.book_train(self.my_feats)
     self.calculate_weights()
+    self.train(self.my_feats)
+
+  def book_train(self, feats):
+
+    documents = [(list(movie_reviews.words(fileid)), category)
+                  for category in movie_reviews.categories()
+                  for fileid in movie_reviews.fileids(category)]
+
+    random.shuffle(documents)
+
+    self.all_words = nltk.FreqDist(w.lower() for w in movie_reviews.words() if w not in self.stopset)
+    self.word_features = self.all_words.keys()[:1000]
+
+    featuresets = [(self.text_feats(d), c) for (d,c) in documents]
+    train_set, test_set = featuresets[200:], featuresets[:200]
+    self.classifier = nltk.NaiveBayesClassifier.train(train_set)
+
+    print nltk.classify.accuracy(self.classifier, test_set)
+
+    self.classifier.show_most_informative_features(10)
+
+
   def train(self, feats):
     print "Starting to train the data"
     start = datetime.datetime.now()
 
+    print "setting the ids", datetime.datetime.now()
     self.negids = movie_reviews.fileids('neg')
     self.posids = movie_reviews.fileids('pos')
     #random.shuffle(self.negids)
     #random.shuffle(self.posids)
+    ##self.reviews = ([(movie_reviews.words(fileids=[f]), 'neg') for f in self.negids] +
+        ##[(movie_reviews.words(fileids=[f]), 'pos') for f in self.posids])
+    ##random.shuffle(self.reviews)
 
+    ##self.train_set = apply_features(feats, self.reviews[len(self.reviews)*1/4:])
+    ##self.test_set = apply_features(feats, self.reviews[:len(self.reviews)*1/4])
+
+    print "setting the feats", datetime.datetime.now()
     self.negfeats = [(feats(movie_reviews.words(fileids=[f])), 'neg') for f in self.negids]
     self.posfeats = [(feats(movie_reviews.words(fileids=[f])), 'pos') for f in self.posids]
 
     self.negcutoff = len(self.negfeats)*3/4
     self.poscutoff = len(self.posfeats)*3/4
 
+    print "setting the train/test", datetime.datetime.now()
     self.trainfeats = self.negfeats[:self.negcutoff] + self.posfeats[:self.poscutoff]
     self.testfeats = self.negfeats[self.negcutoff:] + self.posfeats[self.poscutoff:]
 
+    print "training", datetime.datetime.now()
     self.classifier = NaiveBayesClassifier.train(self.trainfeats)
+    ##self.classifier = NaiveBayesClassifier.train(self.train_set)
     self.refsets = defaultdict(set)
     self.testsets = defaultdict(set)
 
+    print "accuracy stuff", datetime.datetime.now()
     for i, (feats, label) in enumerate(self.testfeats):
+    ##for i, (feats, label) in enumerate(self.test_set):
       self.refsets[label].add(i)
       observed = self.classifier.classify(feats)
       self.testsets[observed].add(i)
@@ -76,6 +125,7 @@ class Data:
 
 
     print 'accuracy:', nltk.classify.util.accuracy(self.classifier, self.testfeats)
+    ##print 'accuracy:', nltk.classify.util.accuracy(self.classifier, self.test_set)
     print 'pos precision:', nltk.metrics.precision(self.refsets['pos'], self.testsets['pos'])
     print 'pos recall:', nltk.metrics.recall(self.refsets['pos'], self.testsets['pos'])
     print 'neg precision:', nltk.metrics.precision(self.refsets['neg'], self.testsets['neg'])
@@ -89,7 +139,7 @@ class Data:
   def classify(self, words):
     #words = words.split()
     #words_dict = dict([(word, True) for word in words])
-    feature_dict = self.my_feats(words.split())
+    feature_dict = self.my_feats(self.parse_text(words))
     print "Class_dict is:", feature_dict
     return self.classifier.classify(feature_dict)
   classify.exposed = True
@@ -145,7 +195,7 @@ class Data:
   largest_weights.exposed = True
 
   def weights(self, words):
-    feature_dict = self.my_feats([word.lower() for word in words.split()])
+    feature_dict = self.my_feats(self.parse_text(words))
     weights = {}
 
     for feature, value in feature_dict.items():
